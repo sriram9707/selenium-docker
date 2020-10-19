@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+echo "selenium 3 version=$(selenium_version) revision=$(selenium_revision_version)"
+
+echo "chrome_stable_version=$(chrome_stable_version)"
+google-chrome-stable --version
+
+echo "firefox_version=$(firefox_version)"
+firefox --version
+
+echo "chromedriver_version=$(chromedriver_version)"
+chromedriver --version
+
+echo "geckodriver_version=$(geckodriver_version)"
+/opt/geckodriver --version
+
+echo "java_build_version=$(java_build_version)"
+java -version
+
+echo "python_version=$(python_version)"
+python --version

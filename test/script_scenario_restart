@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# set -e: exit asap if a command exits with a non-zero status
+# set -x: print each command right before it is executed
+set -xe
+
+SLEEP_RACE_COND_SECS=2
+WAIT_ALL_DONE="40s"
+
+if [ "${CI}" = "true" ]; then
+  SLEEP_RACE_COND_SECS=7 #to avoid issue #83
+  WAIT_ALL_DONE="200s"
+fi
+
+set +x
+echo "#======================================"
+echo "# Scenario 2a [restart]: Normal restart"
+echo "#======================================"
+set -x
+
+docker restart grid #normal restart
+# docker restart grid_mock #only needed when sharing the network interface
+sleep ${SLEEP_RACE_COND_SECS}
+docker exec grid wait_all_done ${WAIT_ALL_DONE}
+docker logs grid
+docker exec grid errors || true
+docker exec -t grid run_test
+
+set +x
+echo "#========================================================================"
+echo "# Scenario 2b [restart]: Forced quick container restart + run tests again"
+echo "#========================================================================"
+set -x
+
+docker restart --time=0 grid #forced quick restart
+# docker restart --time=0 grid_mock #only needed when sharing the network interface
+sleep ${SLEEP_RACE_COND_SECS}
+docker exec grid wait_all_done ${WAIT_ALL_DONE}
+docker logs grid
+docker exec grid errors || true
+docker exec -t grid run_test

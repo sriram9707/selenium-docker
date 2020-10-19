@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+# set -e: exit asap if a command exits with a non-zero status
+# set -x: print each command right before it is executed
+set -xe
+
+# cleanup
+# sudo service docker stop || true
+# sudo rm -f /etc/apt/sources.list.d/docker.list
+# sudo rm -f /usr/lib/systemd/system/docker.service
+# sudo apt -qqy purge lxc-docker || true
+# sudo apt -qqy purge docker-engine || true
+# sudo /etc/init.d/apparmor stop || true
+# sudo rm -rf /var/lib/docker /dev/mapper/docker* /usr/bin/docker /run/docker /etc/docker || true
+# sudo rm -rf /etc/apt/sources.list.d/docker* /etc/default/docker /etc/init.d/docker /etc/apparmor.d/cache/docker || true
+# sudo rm -rf /etc/apparmor.d/docker /etc/bash_completion.d/docker /var/log/upstart/docker* || true
+# sudo rm -rf /var/lib/apt/lists/*docker* /var/lib/dpkg/info/*docker* /dev/disk/by-id/*docker* || true
+# sudo rm -rf /var/cache/apt/archives/docker* || true
+# sudo chown -R ${USER} /home/travis/.gnupg || true
+
+# GPG servers aren't too reliable (especially in out test builds)
+# so fallback servers are needed
+#  ref: https://github.com/nodejs/docker-node/issues/340#issuecomment-321669029
+#  ref: http://askubuntu.com/a/235911/134645
+#  ref: https://github.com/moby/moby/issues/20022#issuecomment-182169732
+set -ex
+for key in \
+  2EA8F35793D8809A \
+  40976EAF437D05B5 \
+  3B4FE6ACC0B21F32 \
+  A2F683C52980AECF \
+  F76221572C52609D \
+  58118E89F3A912897C070ADBF76221572C52609D \
+; do \
+  gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
+  gpg --keyserver pgp.mit.edu --recv-keys "$key" || \
+  gpg --keyserver keyserver.pgp.com --recv-keys "$key" || \
+  gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key" ; \
+done
+
+export DEBCONF_NONINTERACTIVE_SEEN=true
+
+# install docker (<=2018)
+# CODE_NAME=$(lsb_release -sc) #e.g. trusty
+# [ "${CODE_NAME}" == "" ] && CODE_NAME=trusty
+# sudo sh -c "echo 'deb [arch=amd64] https://download.docker.com/linux/ubuntu ${CODE_NAME} stable' >> /etc/apt/sources.list.d/docker.list"
+# # sed -i.bak '/docker/d' /etc/apt/sources.list.d/docker.list
+# sudo apt -qqy update
+# sudo apt -qqy install apt-transport-https ca-certificates
+
+# sudo apt-cache policy docker-engine || true
+# sudo apt -qqy install linux-image-extra-$(uname -r)
+# sudo apt -qqy install apparmor
+# sudo /etc/init.d/apparmor start || true
+# sudo apt -qqy install docker-engine
+# sudo apt -qyy install docker-ce
+
+# install docker (2019)
+# https://docs.travis-ci.com/user/docker/#installing-a-newer-docker-version
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt -qqy update
+sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
+
+# if [ "${DOCKER_VERSION}" != "stable" ]; then
+#   # wget -nv -O docker.tgz "https://github.com/docker/docker/archive/v${DOCKER_VERSION}.tar.gz"
+#   # tar xvzf docker.tgz
+#   # mv docker-${DOCKER_VERSION} docker_src
+#   # mv docker_src/* /usr/bin/
+#   wget -nv -O docker.tgz "https://test.docker.com/builds/Linux/x86_64/docker-${DOCKER_VERSION}.tgz"
+#   tar -xvzf docker.tgz
+#   sudo mv docker/* /usr/bin/
+#   sudo service docker stop || true
+# fi
+
+sudo service docker start || true
+
+docker --version

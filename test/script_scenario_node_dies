@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+
+echo "#======================================================"
+echo "# Scenario 3 [node_dies]: Node dies then container dies"
+echo "#======================================================"
+
+###################
+# Echo with Error #
+###################
+echoerr() { printf "%s\n" "$*" >&2; }
+
+########################
+# Print error and exit #
+########################
+die () {
+  echoerr "ERROR: $1"
+  # if $2 is defined AND NOT EMPTY, use $2; otherwise, set to "160"
+  errnum=${2-160}
+  exit $errnum
+}
+
+# set -e: exit asap if a command exits with a non-zero status
+# set -x: print each command right before it is executed
+set -xe
+
+export SELENIUM_NODE_CH_PORT=5757 \
+       SELENIUM_NODE_FF_PORT=6868 \
+       SELENIUM_MULTINODE_PORT=7979 \
+       SHUTDOWN_END_POINT="selenium-server/driver/?cmd=shutDownSeleniumServer"
+
+if [ "${CI}" = "true" ]; then
+  NODE_SUICIDE_WAIT_TIME=20
+else
+  NODE_SUICIDE_WAIT_TIME=3
+fi
+
+export MOCK_SERVER_PORT=8280
+
+set +x
+echo "#================================================="
+echo "# Scenario 3a [node_dies]: Dies by killing Chrome"
+echo "#================================================="
+set -x
+
+# Ensure clean env
+docker rm -vf mynodes || true
+docker rm -vf grid_mock || true
+
+# Create container for Chrome
+docker run --name=mynodes -d \
+  -e FIREFOX=false \
+  -e CI \
+  -e SELENIUM_NODE_CH_PORT -p ${SELENIUM_NODE_CH_PORT}:${SELENIUM_NODE_CH_PORT} \
+  -v /dev/shm:/dev/shm \
+  --privileged \
+  selenium
+
+# We need a mock service for testing
+docker run -d -t --name=grid_mock -e MOCK_SERVER_PORT \
+  --net=container:mynodes \
+  -e CI \
+  elgalu/google_adwords_mock
+
+docker exec mynodes wait_all_done 20s || (docker logs mynodes && docker exec mynodes errors)
+docker exec mynodes wait_all_done 70s
+docker exec mynodes errors || true
+docker logs mynodes
+
+# Basic checkup
+docker exec -t mynodes selenium_test chrome
+docker exec mynodes errors || true
+
+# https://github.com/SeleniumHQ/selenium/issues/2852
+# if curl -s "http://localhost:${SELENIUM_NODE_CH_PORT}/${SHUTDOWN_END_POINT}" | grep "OKOK"; then
+if docker stop mynodes; then
+  # The container should have been removed
+  sleep ${NODE_SUICIDE_WAIT_TIME}
+  if docker rm mynodes; then
+    echo "Chrome 3a PASSED"
+  else
+    die "Test failed for Chrome at $0 during docker rm mynodes"
+  fi
+else
+  echoerr "Expected OKOK at $0 for Chrome but got something else"
+  curl "http://localhost:${SELENIUM_NODE_CH_PORT}/${SHUTDOWN_END_POINT}"
+  die "Test failed for Chrome at $0 during curl"
+fi
+
+set +x
+echo "#================================================="
+echo "# Scenario 3b [node_dies]: Dies by killing Firefox"
+echo "#   + REMOVE_SELUSER_FROM_SUDOERS_FOR_TESTING=true"
+echo "#================================================="
+set -x
+
+# Ensure clean env
+docker rm -vf mynodes || true
+docker rm -vf grid_mock || true
+
+# Create container for Firefox
+docker run --name=mynodes -d \
+  -v /dev/shm:/dev/shm \
+  -e REMOVE_SELUSER_FROM_SUDOERS_FOR_TESTING=true \
+  -e CHROME=false -e CI \
+  -e SELENIUM_NODE_FF_PORT -p ${SELENIUM_NODE_FF_PORT}:${SELENIUM_NODE_FF_PORT} \
+  selenium
+
+# We need a mock service for testing
+docker run -d -t --name=grid_mock -e MOCK_SERVER_PORT \
+  --net=container:mynodes \
+  -e CI \
+  elgalu/google_adwords_mock
+
+docker exec mynodes wait_all_done 20s || (docker logs mynodes && docker exec mynodes errors)
+docker exec mynodes wait_all_done 70s
+docker exec mynodes errors || true
+docker logs mynodes
+
+# Basic checkup
+docker exec -t mynodes selenium_test firefox
+docker exec mynodes errors || true
+
+# https://github.com/SeleniumHQ/selenium/issues/2852
+# if curl -s "http://localhost:${SELENIUM_NODE_FF_PORT}/${SHUTDOWN_END_POINT}" | grep "OKOK"; then
+if docker stop mynodes; then
+  # The container should have been removed
+  sleep ${NODE_SUICIDE_WAIT_TIME}
+  if docker rm mynodes; then
+    echo "Firefox 3a PASSED"
+  else
+    die "Test failed for Firefox at $0 during docker rm mynodes"
+  fi
+else
+  echoerr "Expected OKOK at $0 for Firefox but got something else"
+  curl "http://localhost:${SELENIUM_NODE_FF_PORT}/${SHUTDOWN_END_POINT}"
+  die "Test failed for Firefox at $0 during curl"
+fi
+
+set +x
+echo "#======================================================"
+echo "# Scenario 3c [node_dies]: Dies by killing a Multi-node"
+echo "#      + run tests again simulation USE_KUBERNETES=true"
+echo "#======================================================"
+set -x
+
+# Ensure clean env
+docker rm -vf mynodes || true
+docker rm -vf grid_mock || true
+
+# Create container for Firefox and simulate USE_KUBERNETES=true
+docker run --name=mynodes -d \
+  -v /dev/shm:/dev/shm \
+  --privileged \
+  -e CHROME=false \
+  -e FIREFOX=false \
+  -e MULTINODE=true \
+  -e CI \
+  -e USE_KUBERNETES=true \
+  -e SELENIUM_MULTINODE_PORT \
+  -p ${SELENIUM_MULTINODE_PORT}:${SELENIUM_MULTINODE_PORT} \
+  selenium
+
+# We need a mock service for testing
+docker run -d -t --name=grid_mock -e MOCK_SERVER_PORT \
+  --net=container:mynodes \
+  -e CI \
+  elgalu/google_adwords_mock
+
+docker exec mynodes wait_all_done 20s || (docker logs mynodes && docker exec mynodes errors)
+docker exec mynodes wait_all_done 70s
+docker exec mynodes errors || true
+docker logs mynodes
+
+# Basic checkup on both browsers (on the same node)
+docker exec -t mynodes selenium_test chrome &
+docker exec -t mynodes selenium_test firefox &
+wait
+docker exec mynodes errors || true
+
+# https://github.com/SeleniumHQ/selenium/issues/2852
+# if curl -s "http://localhost:${SELENIUM_MULTINODE_PORT}/${SHUTDOWN_END_POINT}" | grep "OKOK"; then
+if docker stop mynodes; then
+  # The container should have been removed
+  sleep ${NODE_SUICIDE_WAIT_TIME}
+  if docker rm mynodes; then
+    echo "Chrome & Firefox multi-node 3c PASSED"
+  else
+    die "Test failed for Chrome & Firefox multi-node at $0 during docker rm mynodes"
+  fi
+else
+  echoerr "Expected OKOK at $0 for Chrome & Firefox multi-node but got something else"
+  curl "http://localhost:${SELENIUM_MULTINODE_PORT}/${SHUTDOWN_END_POINT}"
+  die "Test failed for Chrome & Firefox multi-node at $0 during curl"
+fi
+
+# Ensure clean env
+docker rm -vf mynodes || true
+docker rm -vf grid_mock || true
+
+# cleanup
+make down

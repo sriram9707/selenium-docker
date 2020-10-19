@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# set -e: exit asap if a command exits with a non-zero status
+# set -x: print each command right before it is executed
+set -xe
+
+echoerr() { printf "%s\n" "$*" >&2; }
+
+# print error and exit
+die () {
+  echoerr "ERROR: $1"
+  # if $2 is defined AND NOT EMPTY, use $2; otherwise, set to "150"
+  errnum=${2-133}
+  exit $errnum
+}
+
+docker --version || echo "WARN: No docker installed yet"
+docker-compose --version || echo "WARN: No docker-compose installed yet"
+
+[ "${TRAVIS_BUILD_NUMBER}" == "" ] && die "Need env var TRAVIS_BUILD_NUMBER to know where to pull from"
+
+if [[ ${TRAVIS_PULL_REQUEST_SLUG} != "" && \
+      ${TRAVIS_PULL_REQUEST_SLUG} != ${TRAVIS_REPO_SLUG} && \
+      ${TRAVIS_PULL_REQUEST} != "false" ]]; then
+  echo "WARN: External PRs are untrusted by default therefore we need can't reuse and pull the image so building it from scratch..."
+  # ./test/before_install_setup
+  ./host-scripts/gen-scm-source.sh
+  docker build -t selenium .
+  docker tag selenium:latest elgalu/selenium:latest
+else
+  docker pull elgalu/build_selenium:${TRAVIS_BUILD_NUMBER}
+  docker tag elgalu/build_selenium:${TRAVIS_BUILD_NUMBER} selenium:latest
+  docker tag elgalu/build_selenium:${TRAVIS_BUILD_NUMBER} elgalu/selenium:latest
+fi
+
+docker images selenium
+docker images elgalu/selenium

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+echo "#================================================"
+echo "# Scenario 4a [make]: Docker Compose many nodes"
+echo "#================================================"
+
+# set -e: exit asap if a command exits with a non-zero status
+# set -x: print each command right before it is executed
+set -xe
+
+export TESTING_MAKE="true" \
+       VNC_FROM_PORT="5010" VNC_TO_PORT="5030"
+
+if [ "${CI}" = "true" ]; then
+  make setup compose chrome=2 firefox=1
+else
+  make setup compose chrome=2 firefox=1
+  make scale chrome=2 firefox=2
+  # also has a real display so we can "see"
+  make see browser=chrome node=1
+fi
+
+make wait
+make test
+rm -f videos/*.mp4
+make videos
+make cleanup
+make down
+docker rm -vf grid_hub_1 || true
+
+set +x
+echo "#==================================="
+echo "# Scenario 4b [make]: wget Makefile"
+echo "#==================================="
+set -x
+
+# Test clean directory
+if [ "${TRAVIS_PULL_REQUEST}" == "true" ]; then
+  echo "This is a PR so will skip to test make clean dir"
+  export GIT_TAG_OR_BRANCH=""
+elif [ "${TRAVIS_TAG}" != "" ]; then
+  export GIT_TAG_OR_BRANCH="${TRAVIS_TAG}"
+elif [ "${TRAVIS_COMMIT}" != "" ]; then
+  export GIT_TAG_OR_BRANCH="${TRAVIS_COMMIT}"
+else
+  export GIT_TAG_OR_BRANCH="master"
+fi
+
+if [ "${GIT_TAG_OR_BRANCH}" != "" ]; then
+  mkdir -p tmp_make
+  cd tmp_make
+  ln -s ../Makefile || true
+  export VNC_FROM_PORT="5110" VNC_TO_PORT="5120"
+  make get setup
+  if [ "${CI}" = "true" ]; then
+    make install_vnc install_wmctrl
+  fi
+  # Test default 1 chrome 1 firefox case
+  make
+  make wait
+  make test
+  # Test alias
+  make down
+  cd ..
+fi

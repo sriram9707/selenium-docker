@@ -1,0 +1,60 @@
+# The purpose of this -scales example is to run 1 hub, N chromes, N firefox
+#
+# Usage:
+#  docker-compose -f docker-compose-scales.yml -p grid up --force-recreate
+# How to scale it:
+#  docker-compose -f docker-compose-scales.yml -p grid scale hub=1 chrome=2 firefox=1
+version: '3'
+
+services:
+  hub:
+    image: elgalu/selenium
+    ports:
+      - 4444:4444
+    volumes:
+      - /dev/shm:/dev/shm
+    privileged: true
+    environment:
+      - SELENIUM_HUB_HOST=hub
+      - SELENIUM_HUB_PORT=4444
+      - GRID=true
+      - CHROME=false
+      - FIREFOX=false
+
+  chrome:
+    image: elgalu/selenium
+    depends_on:
+      - hub
+    volumes:
+      - /dev/shm:/dev/shm
+    privileged: true
+    environment:
+      - SELENIUM_HUB_HOST=hub
+      - SELENIUM_HUB_PORT=4444
+      - SELENIUM_NODE_HOST={{CONTAINER_IP}}
+      - SCREEN_WIDTH=1300
+      - SCREEN_HEIGHT=999
+      - VIDEO=false
+      - AUDIO=false
+      - GRID=false
+      - CHROME=true
+      - FIREFOX=false
+
+  firefox:
+    image: elgalu/selenium
+    depends_on:
+      - hub
+    volumes:
+      - /dev/shm:/dev/shm
+    privileged: true
+    environment:
+      - SELENIUM_HUB_HOST=hub
+      - SELENIUM_HUB_PORT=4444
+      - SELENIUM_NODE_HOST={{CONTAINER_IP}}
+      - SCREEN_WIDTH=1300
+      - SCREEN_HEIGHT=999
+      - VIDEO=false
+      - AUDIO=false
+      - GRID=false
+      - CHROME=false
+      - FIREFOX=true

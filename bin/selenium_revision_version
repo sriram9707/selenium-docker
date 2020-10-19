@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+SELENIUM_JAR_PATH="/home/seluser/selenium-server-standalone-3.jar"
+
+# Selenium 3 - Example:
+#=> 5234b32
+java -jar ${SELENIUM_JAR_PATH} --version \
+  | grep revision \
+  | grep -Po '(?<=revision: )([a-z0-9\.]+)'

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+
+SELENIUM_JAR_PATH="/home/seluser/selenium-server-standalone-3.jar"
+
+# Selenium 3 - Example:
+#=> 3.3.1
+java -jar ${SELENIUM_JAR_PATH} --version \
+  | grep version \
+  | grep -Po '(?<=version: )([a-z0-9\.]+)' \
+  | sed 's/\.$//'
